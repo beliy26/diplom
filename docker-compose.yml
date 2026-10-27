@@ -1,0 +1,47 @@
+services:
+  # База данных
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shop
+    ports:
+      - "5433:5432"  # снаружи 5433, т.к. 5432 часто занят локальным PostgreSQL
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Проверка, что база запустилась и готова принимать запросы
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Бэкенд на Python (FastAPI)
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/shop
+      # логин и пароль администратора (создаётся при первом запуске)
+      ADMIN_EMAIL: admin@shop.ru
+      ADMIN_PASSWORD: admin123
+    ports:
+      - "8000:8000"
+    volumes:
+      # загруженные фото товаров хранятся здесь и не пропадают при пересборке
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Фронтенд на React (собирается и раздаётся через nginx)
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  uploads:
